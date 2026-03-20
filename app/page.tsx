@@ -2,72 +2,107 @@
 
 import { useState } from "react";
 
-export default function ScamDetector() {
-  // Store the textarea value in state
-  const [message, setMessage] = useState("");
+type AnalysisResult = {
+  level: "High" | "Medium" | "Low";
+  reason: string;
+  advice: string;
+};
 
-  // Called when the button is clicked
-  const handleCheckScam = () => {
-    alert(message);
+export default function ScamDetector() {
+  const [message, setMessage] = useState("");
+  const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleCheckScam = async () => {
+    setLoading(true);
+    setResult(null);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(`Server error ${res.status}: ${errText}`);
+      }
+
+      const data: AnalysisResult = await res.json();
+      setResult(data);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const levelColor: Record<AnalysisResult["level"], string> = {
+    High: "bg-red-100 text-red-700 border border-red-300",
+    Medium: "bg-yellow-100 text-yellow-700 border border-yellow-300",
+    Low: "bg-green-100 text-green-700 border border-green-300",
   };
 
   return (
-    <main className="min-h-screen bg-amber-50 flex items-center justify-center p-6 font-mono">
+    <main className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="w-full max-w-lg">
 
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="inline-block bg-red-600 text-white text-xs font-bold px-3 py-1 rounded-full mb-3 tracking-widest uppercase">
-            ⚠ Scam Alert Tool
-          </div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">
-            Scam Detector
-          </h1>
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-black text-gray-900">Scam Detector</h1>
           <p className="text-gray-500 mt-2 text-sm">
-            Paste a suspicious message below to inspect it.
+            Paste a suspicious message and let AI analyze it.
           </p>
         </div>
 
-        {/* Card */}
-        <div className="bg-white border-2 border-gray-900 rounded-2xl shadow-[6px_6px_0px_#111827] p-6">
-
-          {/* Textarea label */}
-          <label
-            htmlFor="message"
-            className="block text-sm font-bold text-gray-700 mb-2"
-          >
+        <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+          <label className="block text-sm font-medium text-gray-600 mb-2">
             Paste message here
           </label>
-
-          {/* Textarea */}
           <textarea
-            id="message"
-            rows={6}
+            rows={5}
             placeholder="e.g. Congratulations! You've won $1,000,000. Click here to claim..."
             value={message}
             onChange={(e) => setMessage(e.target.value)}
-            className="w-full border-2 border-gray-300 rounded-xl p-3 text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-red-500 resize-none transition-colors"
+            className="w-full border border-gray-300 rounded-xl p-3 text-sm focus:outline-none focus:border-red-400 resize-none"
           />
-
-          {/* Character count */}
-          <p className="text-xs text-gray-400 mt-1 text-right">
-            {message.length} characters
-          </p>
-
-          {/* Button */}
           <button
             onClick={handleCheckScam}
-            disabled={message.trim() === ""}
-            className="mt-4 w-full bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold py-3 rounded-xl text-sm tracking-wide transition-colors shadow-md"
+            disabled={message.trim() === "" || loading}
+            className="mt-4 w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-200 disabled:text-gray-400 text-white font-semibold py-3 rounded-xl text-sm transition-colors"
           >
-            🔍 Check Scam
+            {loading ? "Analyzing..." : "Check Scam"}
           </button>
         </div>
 
-        {/* Footer note */}
-        <p className="text-center text-xs text-gray-400 mt-6">
-          Your message is never sent anywhere. Everything stays on your device.
-        </p>
+        {error && (
+          <div className="mt-4 bg-red-50 border border-red-200 rounded-2xl p-4">
+            <p className="text-sm font-semibold text-red-600 mb-1">Error</p>
+            <p className="text-xs text-red-500 font-mono break-all">{error}</p>
+          </div>
+        )}
+
+        {result && (
+          <div className="mt-4 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <span className="text-sm font-medium text-gray-500">Risk Level</span>
+              <span className={`text-sm font-bold px-3 py-1 rounded-full ${levelColor[result.level]}`}>
+                {result.level}
+              </span>
+            </div>
+            <div className="mb-3">
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Why</p>
+              <p className="text-gray-800 text-sm leading-relaxed">{result.reason}</p>
+            </div>
+            <div>
+              <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">Advice</p>
+              <p className="text-gray-800 text-sm leading-relaxed">{result.advice}</p>
+            </div>
+          </div>
+        )}
+
       </div>
     </main>
   );
